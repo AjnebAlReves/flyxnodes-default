@@ -26,7 +26,7 @@ console.log(estilos.exito("¿Problemas? Abre un ticket en nuestro Discord.\n"));
 // Bucle más eficiente con setInterval
 const intervalo = setInterval(() => {
     console.log(estilos.info("🛠️ Servicio en ejecución..."));
-}, 5000);
+}, 100000);
 
 // Manejo mejorado de SIGINT
 process.on('SIGINT', () => {
