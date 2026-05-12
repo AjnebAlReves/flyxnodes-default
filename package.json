@@ -1,11 +1,5 @@
-{
-  "name": "flyxnodes-default-nodejs",
-  "version": "1.0.0",
+{  
   "main": "index.js",
-  "license": "MIT",
-  "scripts": {
-    "hola": "npm i && node ."
-  },
   "dependencies": {
     "chalk": "^4.1.2"
   }
