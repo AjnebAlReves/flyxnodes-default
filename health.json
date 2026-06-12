@@ -1,0 +1,8 @@
+{
+  "status": "ok",
+  "runtime": "static",
+  "version": "1.0",
+  "service": "Nellyx Service",
+  "port": 80,
+  "timestamp": "__DYNAMIC__"
+}

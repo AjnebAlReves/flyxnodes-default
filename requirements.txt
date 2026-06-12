@@ -1,0 +1,4 @@
+# Nellyx Python service defaults
+# Add your dependencies below:
+# flask>=3.0
+# requests>=2.31

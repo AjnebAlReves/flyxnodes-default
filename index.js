@@ -1,194 +1,166 @@
-
-const chalk = require('chalk');
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-// Detectar modo dry-run desde argumentos o variable de entorno
-const isDryRun = process.argv.includes('--dry-run') || 
-                 process.argv.includes('--dry') || 
-                 process.env.DRY_RUN === 'true' ||
-                 process.env.NODE_ENV === 'development';
+const PORT = process.env.PORT || 3000;
+const NAME = process.env.SERVICE_NAME || 'Nellyx Service';
+const ROOT = __dirname;
 
-// Configuración de estilos avanzados con más diseño
-const estilos = {
-    titulo: chalk.bold.yellowBright,
-    subtitulo: chalk.bold.cyan,
-    advertencia: chalk.bold.bgRed,
-    advertenciaLight: chalk.yellow,
-    exito: chalk.bold.green,
-    exitoLight: chalk.cyan,
-    info: chalk.blue,
-    infoLight: chalk.cyan,
-    fondoDestacado: chalk.bgMagenta.black,
-    fondoExito: chalk.bgGreen.black,
-    fondoAdvertencia: chalk.bgYellow.black,
-    seccion: chalk.bold.magentaBright,
-    decoracion: chalk.gray,
-    link: chalk.underline.cyan,
-    emoji: chalk.bold,
-    tabulador: '   '
-};
+const DEFAULTS = new Set([
+  'index.js', 'package.json', 'package-lock.json',
+  'main.py', 'requirements.txt',
+  'main.go', 'go.mod', 'go.sum',
+  'main.ts', 'deno.json',
+  'index.html', 'index.php',
+  '.env.example', 'welcome.html',
+  'node_modules', '.npm', '__pycache__'
+]);
 
-// Función para crear líneas decorativas
-const linea = (char = '═', width = 50) => estilos.decoracion(char.repeat(width));
+const WELCOME_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>${NAME}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:linear-gradient(135deg,#0f0f1a 0%,#1a1a2e 50%,#16213e 100%);
+    color:#e0e0e0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .container{text-align:center;padding:2rem}
+  .logo{font-size:4rem;font-weight:800;background:linear-gradient(135deg,#00d4ff,#7b2ff7);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:0.5rem}
+  .tagline{font-size:1.2rem;color:#8888aa;margin-bottom:2rem}
+  .card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+    border-radius:12px;padding:2rem;max-width:500px;margin:0 auto 1.5rem;backdrop-filter:blur(10px)}
+  .card h2{color:#00d4ff;margin-bottom:1rem;font-size:1.1rem}
+  .card p{color:#a0a0c0;line-height:1.6;font-size:0.95rem}
+  .info{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:1.5rem;text-align:left}
+  .info-item{background:rgba(255,255,255,0.03);border-radius:8px;padding:0.75rem}
+  .info-item .label{color:#6666aa;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px}
+  .info-item .value{color:#c0c0e0;font-size:0.9rem;margin-top:0.25rem;font-weight:500}
+  .badge{display:inline-block;background:rgba(0,212,255,0.15);color:#00d4ff;
+    padding:0.35rem 1rem;border-radius:20px;font-size:0.8rem;font-weight:600;margin-bottom:1rem}
+  .footer{color:#444466;font-size:0.8rem;margin-top:2rem}
+  a{color:#7b2ff7;text-decoration:none}
+  a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">&#x25B3; Nellyx</div>
+  <div class="tagline">Your Cloud Development Hub</div>
+  <div class="card">
+    <div class="badge">SERVICE DEFAULTS</div>
+    <h2>Welcome to your new service</h2>
+    <p>This is the default template for <strong>${NAME}</strong>.
+    Deploy your code via SFTP, Git, or the Nellyx Console to replace these defaults.</p>
+    <div class="info">
+      <div class="info-item">
+        <div class="label">Runtime</div>
+        <div class="value">Node.js ${process.version}</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Port</div>
+        <div class="value">${PORT}</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Service</div>
+        <div class="value">${NAME}</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Health</div>
+        <div class="value"><a href="/health">/health</a></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer">
+    Nellyx &mdash; <a href="https://nellyx.xyz" target="_blank">nellyx.xyz</a>
+  </div>
+</div>
+</body>
+</html>`;
 
-// Mostrar indicador de modo dry-run si está activo
-if (isDryRun) {
-    console.log(estilos.fondoAdvertencia('  ⚡ DRY-RUN MODE: No files will be deleted / MODO SIMULACIÓN: No se eliminarán archivos  '));
-    console.log();
+function hasUserFiles() {
+  try {
+    for (const entry of fs.readdirSync(ROOT)) {
+      if (entry.startsWith('.') || DEFAULTS.has(entry)) continue;
+      const stat = fs.statSync(path.join(ROOT, entry));
+      if (stat.isFile() || stat.isDirectory()) return true;
+    }
+  } catch {}
+  return false;
 }
 
-// Mensaje de bienvenida ultra mejorado con diseño
-console.clear();
-console.log(estilos.decoracion('╔' + '═'.repeat(60) + '╗'));
-console.log(estilos.fondoDestacado('                  🚀 WELCOME TO FLYXNODES 🚀                   '));
-console.log(estilos.decoracion('║' + ' '.repeat(60) + '║'));
-console.log(estilos.decoracion('║') + estilos.titulo('   ¡Bienvenido a FlyxNodes - Your Cloud Development Hub!   ') + estilos.decoracion('║'));
-console.log(estilos.decoracion('╚' + '═'.repeat(60) + '╝'));
-
-console.log('\n' + estilos.seccion('📋 GETTING STARTED / PARA EMPEZAR:\n'));
-
-console.log(estilos.tabulador + estilos.emoji('▶') + '  ' + estilos.infoLight('File Management / Gestión de Archivos'));
-console.log(estilos.tabulador.repeat(2) + estilos.info('• Use SFTP to upload your files'));
-console.log(estilos.tabulador.repeat(2) + estilos.info('• Usa SFTP para subir tus archivos\n'));
-
-console.log(estilos.tabulador + estilos.emoji('▶') + '  ' + estilos.infoLight('Repository Integration / Integración de Repositorio'));
-console.log(estilos.tabulador.repeat(2) + estilos.info('• Link GitHub/GitLab for automatic updates'));
-console.log(estilos.tabulador.repeat(2) + estilos.info('• Vincula GitHub/GitLab para actualizaciones automáticas\n'));
-
-console.log(estilos.tabulador + estilos.emoji('▶') + '  ' + estilos.infoLight('Need Help? / ¿Necesitas Ayuda?'));
-console.log(estilos.tabulador.repeat(2) + estilos.info('• Open a ticket on: ' + estilos.link('discord.gg/flyxnodes')));
-console.log(estilos.tabulador.repeat(2) + estilos.info('• Abre un ticket en: ' + estilos.link('discord.gg/flyxnodes')));
-
-// ⚠️ Aviso importante sobre eliminación de archivos con diseño mejorado
-console.log('\n' + estilos.decoracion('┌' + '─'.repeat(58) + '┐'));
-console.log(estilos.decoracion('│') + estilos.advertenciaLight('  ⚠️  WARNING / ADVERTENCIA  ⚠️  ').padEnd(59) + estilos.decoracion('│'));
-console.log(estilos.decoracion('├' + '─'.repeat(58) + '┤'));
-console.log(estilos.decoracion('│') + '  On shutdown, the following files will be deleted: '.padEnd(59) + estilos.decoracion('│'));
-console.log(estilos.decoracion('│') + '  Al apagar, se eliminarán los siguientes archivos: '.padEnd(59) + estilos.decoracion('│'));
-console.log(estilos.decoracion('│' + ' '.repeat(58) + '│'));
-console.log(estilos.decoracion('│') + estilos.advertenciaLight('  ✗ index.js').padEnd(59) + estilos.decoracion('│'));
-console.log(estilos.decoracion('│') + estilos.advertenciaLight('  ✗ package.json & package-lock.json').padEnd(59) + estilos.decoracion('│'));
-console.log(estilos.decoracion('│') + estilos.advertenciaLight('  ✗ node_modules/ & .npm/').padEnd(59) + estilos.decoracion('│'));
-console.log(estilos.decoracion('└' + '─'.repeat(58) + '┘\n'));
-
-// Bucle mejorado con mensaje animado
-let contador = 0;
-const simbolos = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const intervalo = setInterval(() => {
-    contador++;
-    const spinner = simbolos[contador % simbolos.length];
-    const tiempo = new Date().toLocaleTimeString();
-    process.stdout.write(`\r${estilos.emoji(spinner)} [${estilos.infoLight(tiempo)}] ${estilos.info('🛠️  Service running / Servicio en ejecución...'.padEnd(40))}`);
-}, 100);
-
-// Manejo mejorado de SIGINT con interfaz visual mejorada
-process.on('SIGINT', () => {
-    clearInterval(intervalo);
-    console.log('\n\n' + estilos.decoracion('╔' + '═'.repeat(60) + '╗'));
-    console.log(estilos.decoracion('║') + estilos.fondoAdvertencia('         🛑 SHUTDOWN INITIATED / APAGUE INICIADO         ') + estilos.decoracion('║'));
-    console.log(estilos.decoracion('╚' + '═'.repeat(60) + '╝\n'));
-
-    const filesToDelete = [
-        path.resolve(__filename),  // index.js
-        path.resolve(path.join(path.dirname(__filename), 'package.json')),
-        path.resolve(path.join(path.dirname(__filename), 'package-lock.json')),
-        path.resolve(path.join(path.dirname(__filename), 'node_modules')),
-        path.resolve(path.join(path.dirname(__filename), '.npm'))
-    ];
-    
-    let deletedFiles = [];
-    let errors = [];
-
-    // Verificación adicional de seguridad
-    const cwd = process.cwd();
-    for (const file of filesToDelete) {
-        if (!file.includes(cwd)) {
-            console.log(estilos.decoracion('┌─ ') + estilos.advertencia('❌ SECURITY CHECK FAILED / VERIFICACIÓN DE SEGURIDAD FALLIDA'));
-            console.log(estilos.decoracion('└─ ') + estilos.info('Unsafe path detected / Ruta insegura detectada\n'));
-            process.exit(1);
-        }
+function selfDestruct() {
+  if (hasUserFiles()) {
+    console.log('  📦 User files detected — keeping defaults in place');
+    return;
+  }
+  console.log('  🧹 Cleaning up default template files...');
+  for (const file of DEFAULTS) {
+    const fp = path.join(ROOT, file);
+    try {
+      const stat = fs.statSync(fp, { throwIfNoEntry: false });
+      if (!stat) continue;
+      if (stat.isDirectory()) {
+        fs.rmSync(fp, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(fp);
+      }
+      console.log('     ✓ removed ' + file);
+    } catch (e) {
+      console.log('     ✗ ' + file + ': ' + e.message);
     }
+  }
+  console.log('  ✨ Defaults cleaned up');
+}
 
-    console.log(estilos.seccion('📦 DELETING DEFAULT FILES / ELIMINANDO ARCHIVOS POR DEFECTO:\n'));
+const server = http.createServer((req, res) => {
+  const url = req.url;
 
-    // Mostrar modo dry-run si está activo
-    if (isDryRun) {
-        console.log(estilos.fondoAdvertencia('  🔍 DRY-RUN: Simulating deletion (no files will be removed) / Simulando eliminación (no se eliminarán archivos)  \n'));
-    }
+  if (url === '/health' || url === '/healthz') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      status: 'ok',
+      runtime: 'node',
+      version: process.version,
+      service: NAME,
+      port: PORT,
+      timestamp: new Date().toISOString()
+    }));
+    return;
+  }
 
-    // Función para eliminar recursivamente directorios
-    const deleteRecursive = (filePath) => {
-        return new Promise((resolve) => {
-            const stats = fs.statSync(filePath, { throwIfNoEntry: false });
-            
-            if (!stats) {
-                resolve(true);
-                return;
-            }
-
-            // En modo dry-run, solo simular
-            if (isDryRun) {
-                deletedFiles.push(path.basename(filePath));
-                console.log(estilos.tabulador + estilos.exitoLight('✓ [DRY-RUN] ' + path.basename(filePath)));
-                resolve(true);
-                return;
-            }
-            
-            if (stats.isDirectory()) {
-                fs.rm(filePath, { recursive: true, force: true }, (err) => {
-                    if (err) {
-                        errors.push({ name: path.basename(filePath), error: err.message });
-                        console.log(estilos.tabulador + estilos.advertenciaLight('✗ ' + path.basename(filePath)) + estilos.info(` (${err.message})`));
-                    } else {
-                        deletedFiles.push(path.basename(filePath));
-                        console.log(estilos.tabulador + estilos.exito('✓ ' + path.basename(filePath)));
-                    }
-                    resolve(!err);
-                });
-            } else {
-                fs.unlink(filePath, (err) => {
-                    if (err) {
-                        errors.push({ name: path.basename(filePath), error: err.message });
-                        console.log(estilos.tabulador + estilos.advertenciaLight('✗ ' + path.basename(filePath)) + estilos.info(` (${err.message})`));
-                    } else {
-                        deletedFiles.push(path.basename(filePath));
-                        console.log(estilos.tabulador + estilos.exito('✓ ' + path.basename(filePath)));
-                    }
-                    resolve(!err);
-                });
-            }
-        });
-    };
-
-    // Eliminar todos los archivos
-    Promise.all(filesToDelete.map(deleteRecursive)).then(() => {
-        console.log('\n' + estilos.decoracion('╔' + '═'.repeat(60) + '╗'));
-        
-        if (isDryRun) {
-            console.log(estilos.decoracion('║') + estilos.fondoAdvertencia('      🔍 DRY-RUN SIMULATION COMPLETED / SIMULACIÓN COMPLETADA      ') + estilos.decoracion('║'));
-        } else if (errors.length === 0) {
-            console.log(estilos.decoracion('║') + estilos.fondoExito('           ✨ SELF-DESTRUCTION COMPLETE ✨           ') + estilos.decoracion('║'));
-        } else {
-            console.log(estilos.decoracion('║') + estilos.fondoAdvertencia('         ⚠️  DELETION COMPLETED WITH ERRORS  ⚠️        ') + estilos.decoracion('║'));
-        }
-        
-        console.log(estilos.decoracion('╚' + '═'.repeat(60) + '╝\n'));
-        
-        if (deletedFiles.length > 0) {
-            const label = isDryRun 
-                ? '🔍 SIMULATED FILES / ARCHIVOS SIMULADOS:\n' 
-                : '✅ SUCCESSFULLY DELETED / ELIMINADOS CORRECTAMENTE:\n';
-            console.log(estilos.seccion(label));
-            deletedFiles.forEach(file => console.log(estilos.tabulador + (isDryRun ? estilos.exitoLight : estilos.exito)('  • ' + file)));
-        }
-        
-        if (errors.length > 0) {
-            console.log('\n' + estilos.seccion('⚠️  ERRORS DURING DELETION / ERRORES DURANTE LA ELIMINACIÓN:\n'));
-            errors.forEach(e => console.log(estilos.tabulador + estilos.advertenciaLight('  • ' + e.name + ': ') + estilos.info(e.error)));
-        }
-        
-        console.log('\n' + estilos.decoracion('─'.repeat(62)) + '\n');
-        process.exit(0);
-    });
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(WELCOME_HTML);
 });
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log('');
+  console.log('  ╔══════════════════════════════════════════════╗');
+  console.log('  ║        🚀  Nellyx Service Defaults          ║');
+  console.log('  ╠══════════════════════════════════════════════╣');
+  console.log('  ║  Service: ' + NAME.padEnd(37) + '║');
+  console.log('  ║  Runtime: Node.js ' + process.version.slice(1).padEnd(30) + '║');
+  console.log('  ║  Port:    ' + String(PORT).padEnd(36) + '║');
+  console.log('  ║  Health:  /health' + ' '.repeat(32) + '║');
+  console.log('  ╚══════════════════════════════════════════════╝');
+  console.log('');
+});
+
+function shutdown(signal) {
+  return () => {
+    console.log('\n  ╔══════════════════════════════════════════════╗');
+    console.log('  ║        🛑  Shutting down (' + signal + ')' + ' '.repeat(14) + '║');
+    console.log('  ╚══════════════════════════════════════════════╝\n');
+    server.close(() => {
+      selfDestruct();
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(0), 5000);
+  };
+}
+
+process.on('SIGINT', shutdown('SIGINT'));
+process.on('SIGTERM', shutdown('SIGTERM'));
